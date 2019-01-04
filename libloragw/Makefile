@@ -14,10 +14,25 @@ CFLAGS := -O2 -Wall -Wextra -std=c99 -Iinc -I.
 
 OBJDIR = obj
 INCLUDES = $(wildcard inc/*.h)
+### library.cfg configuration file processing
+
+ifeq ($(CFG_SPI),native)
+  CFG_SPI_MSG := Linux native SPI driver
+  CFG_SPI_OPT := CFG_SPI_NATIVE
+else ifeq ($(CFG_SPI),ftdi)
+  CFG_SPI_MSG := FTDI SPI-over-USB bridge using libmpsse/libftdi/libusb
+  CFG_SPI_OPT := CFG_SPI_FTDI
+else
+  $(error No SPI physical layer selected, check ../target.cfg file.)
+endif
 
 ### linking options
 
-LIBS := -lloragw -lrt -lm
+ifeq ($(CFG_SPI),native)
+  LIBS := -lloragw -lrt -lm
+else ifeq ($(CFG_SPI),ftdi)
+  LIBS := -lloragw -lrt -lmpsse -lm
+endif
 
 ### general build targets
 
@@ -40,7 +55,10 @@ inc/config.h: ../VERSION library.cfg
 	# Release version
 	@echo "Release version   : $(LIBLORAGW_VERSION)"
 	@echo "	#define LIBLORAGW_VERSION	"\"$(LIBLORAGW_VERSION)\""" >> $@
-	# Debug options
+  # SPI interface
+	@echo "SPI interface     : $(CFG_SPI_MSG)"
+	@echo "	#define $(CFG_SPI_OPT)	1" >> $@
+  # Debug options
 	@echo "	#define DEBUG_AUX	$(DEBUG_AUX)" >> $@
 	@echo "	#define DEBUG_SPI	$(DEBUG_SPI)" >> $@
 	@echo "	#define DEBUG_REG	$(DEBUG_REG)" >> $@
@@ -60,9 +78,13 @@ $(OBJDIR):
 $(OBJDIR)/%.o: src/%.c $(INCLUDES) inc/config.h | $(OBJDIR)
 	$(CC) -c $(CFLAGS) $< -o $@
 
+ifeq ($(CFG_SPI),native)
 $(OBJDIR)/loragw_spi.o: src/loragw_spi.native.c $(INCLUDES) inc/config.h | $(OBJDIR)
 	$(CC) -c $(CFLAGS) $< -o $@
-
+else ifeq ($(CFG_SPI),ftdi)
+$(OBJDIR)/loragw_spi.o: src/loragw_spi.ftdi.c $(INCLUDES) inc/config.h | $(OBJDIR)
+	$(CC) -c $(CFLAGS) $< -o $@
+endif
 $(OBJDIR)/loragw_hal.o: src/loragw_hal.c $(INCLUDES) src/arb_fw.var src/agc_fw.var src/cal_fw.var inc/config.h | $(OBJDIR)
 	$(CC) -c $(CFLAGS) $< -o $@
 
